@@ -1,0 +1,3 @@
+[submodule "examples/core/flutter_app/corrosion"]
+	path = examples/core/flutter_app/corrosion
+	url = https://github.com/corrosion-rs/corrosion.git

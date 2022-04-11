@@ -1,0 +1,10 @@
+target
+.dart_tool
+.cache
+.DS_Store
+.packages
+build
+Cargo.lock
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies

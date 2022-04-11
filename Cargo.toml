@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "core/rust",
+    "core/rust_derive",
+]
