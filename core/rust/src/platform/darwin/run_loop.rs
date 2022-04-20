@@ -16,8 +16,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::sys::dispatch::*;
-
 #[cfg(target_os = "macos")]
 use super::sys::cocoa::*;
 #[cfg(target_os = "macos")]
@@ -215,6 +213,10 @@ impl PlatformRunLoop {
 
     #[cfg(target_os = "macos")]
     pub fn run(&self) {
+        #[cfg(test)]
+        {
+            super::main_thread_hack::ensure_ns_app_thinks_it_is_main_thread();
+        }
         unsafe {
             let app = NSApplication::sharedApplication(nil);
             NSApplication::activateIgnoringOtherApps_(app, YES);
@@ -265,20 +267,9 @@ impl PlatformRunLoopSender {
     where
         F: FnOnce() + 'static + Send,
     {
+        let state_clone = self.state.clone();
         let mut state = self.state.lock().unwrap();
         state.callbacks.push(Box::new(callback));
-        let state = Arc::into_raw(self.state.clone());
-        unsafe {
-            dispatch_async_f(
-                dispatch_get_main_queue(),
-                state as *mut _,
-                Self::dispatch_work,
-            );
-        }
-    }
-
-    extern "C" fn dispatch_work(context: *mut c_void) {
-        let state: Arc<Mutex<State>> = unsafe { Arc::from_raw(context as *mut _) };
-        State::poll(state);
+        state.schedule(state_clone);
     }
 }

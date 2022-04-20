@@ -208,3 +208,21 @@ impl<T: 'static> Future for JoinHandle<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::RunLoop;
+    use std::rc::Rc;
+
+    #[test]
+    fn test_run() {
+        let rl = Rc::new(RunLoop::new());
+        // let sender = rl.new_sender();
+        let rlc = rl.clone();
+        rl.schedule_next(move || {
+            rlc.stop();
+        })
+        .detach();
+        rl.run();
+    }
+}
