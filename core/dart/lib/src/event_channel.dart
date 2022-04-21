@@ -6,7 +6,10 @@ import 'message_channel.dart';
 import 'method_channel.dart';
 
 class NativeEventChannel {
-  const NativeEventChannel(this.name, {this.context});
+  const NativeEventChannel(
+    this.name, {
+    required this.context,
+  });
 
   Stream<dynamic> receiveBroadcastStream([dynamic arguments]) {
     final messageChannel = MessageChannel(name, context: context);
@@ -46,5 +49,5 @@ class NativeEventChannel {
   }
 
   final String name;
-  final MessageChannelContext? context;
+  final MessageChannelContext context;
 }

@@ -4,15 +4,18 @@ import 'package:flutter/services.dart';
 
 import 'message_channel.dart';
 
+typedef MethodCallHandler = FutureOr<dynamic> Function(MethodCall call);
+
 class NativeMethodChannel {
-  NativeMethodChannel(String name, {MessageChannelContext? context})
-      : _messageChannel = MessageChannel(name, context: context);
+  NativeMethodChannel(
+    String name, {
+    required MessageChannelContext context,
+  }) : _messageChannel = MessageChannel(name, context: context);
 
   NativeMethodChannel.withMessageChannel(MessageChannel messageChannel)
       : _messageChannel = messageChannel;
 
-  void setMethodCallHandler(
-      FutureOr<dynamic> Function(MethodCall call)? handler) {
+  void setMethodCallHandler(MethodCallHandler? handler) {
     if (handler != null) {
       _messageChannel.setHandler((value) async {
         try {

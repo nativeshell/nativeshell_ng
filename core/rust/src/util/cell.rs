@@ -18,10 +18,7 @@ impl<T> Late<T> {
     /// Returns whether this Late cell has value already set.
     pub fn is_set(&self) -> bool {
         let value = unsafe { &mut *self.value.get() };
-        match value {
-            Some(_) => true,
-            None => false,
-        }
+        value.is_some()
     }
 
     /// Sets the value of this cell. Panics if called more than once.
