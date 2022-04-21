@@ -211,18 +211,83 @@ impl<T: 'static> Future for JoinHandle<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::RunLoop;
-    use std::rc::Rc;
+    use crate::{
+        util::{Capsule, FutureCompleter},
+        RunLoop,
+    };
+    use std::{
+        cell::RefCell,
+        rc::Rc,
+        sync::{Arc, Mutex},
+        thread,
+        time::{Duration, Instant},
+    };
 
     #[test]
     fn test_run() {
         let rl = Rc::new(RunLoop::new());
         // let sender = rl.new_sender();
         let rlc = rl.clone();
-        rl.schedule_next(move || {
+        let next_called = Rc::new(RefCell::new(false));
+        let next_called_clone = next_called.clone();
+        let start = Instant::now();
+        rl.schedule(Duration::from_millis(50), move || {
+            next_called_clone.replace(true);
             rlc.stop();
         })
         .detach();
+        assert_eq!(*next_called.borrow(), false);
         rl.run();
+        assert_eq!(*next_called.borrow(), true);
+        assert!(start.elapsed() >= Duration::from_millis(50));
+    }
+
+    #[test]
+    fn test_sender() {
+        let run_loop = Rc::new(RunLoop::new());
+        let rl = Arc::new(Mutex::new(Capsule::new(run_loop.clone())));
+        let sender = run_loop.new_sender();
+        let stop_called = Arc::new(Mutex::new(false));
+        let stop_called_clone = stop_called.clone();
+        // make sure to spawn the thread when run loop is already running
+        run_loop
+            .schedule_next(|| {
+                thread::spawn(move || {
+                    sender.send(move || {
+                        let rl = rl.lock().unwrap();
+                        let rl = rl.get_ref().unwrap();
+                        *stop_called_clone.lock().unwrap() = true;
+                        rl.stop();
+                    });
+                });
+            })
+            .detach();
+        assert_eq!(*stop_called.lock().unwrap(), false);
+        run_loop.run();
+        assert_eq!(*stop_called.lock().unwrap(), true);
+    }
+
+    async fn wait(run_loop: Rc<RunLoop>, duration: Duration) {
+        let (future, completer) = FutureCompleter::<()>::new();
+        run_loop
+            .schedule(duration, move || {
+                completer.complete(());
+            })
+            .detach();
+        future.await
+    }
+
+    #[test]
+    fn test_sync() {
+        let run_loop = Rc::new(RunLoop::new());
+        let w = wait(run_loop.clone(), Duration::from_millis(50));
+        let run_loop_clone = run_loop.clone();
+        run_loop.spawn(async move {
+            w.await;
+            run_loop_clone.stop();
+        });
+        let start = Instant::now();
+        run_loop.run();
+        assert!(start.elapsed() >= Duration::from_millis(50));
     }
 }
