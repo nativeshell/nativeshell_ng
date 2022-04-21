@@ -209,6 +209,9 @@ impl<T: 'static> Future for JoinHandle<T> {
     }
 }
 
+// IMPORTANT
+// Test must be run with  cargo test -- --test-threads=1
+// otherwise they will likely crash
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -226,7 +229,6 @@ mod tests {
     #[test]
     fn test_run() {
         let rl = Rc::new(RunLoop::new());
-        // let sender = rl.new_sender();
         let rlc = rl.clone();
         let next_called = Rc::new(RefCell::new(false));
         let next_called_clone = next_called.clone();
