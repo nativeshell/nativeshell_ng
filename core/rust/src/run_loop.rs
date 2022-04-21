@@ -210,7 +210,7 @@ impl<T: 'static> Future for JoinHandle<T> {
 }
 
 // IMPORTANT
-// Test must be run with  cargo test -- --test-threads=1
+// Tests must be run with  cargo test -- --test-threads=1
 // otherwise they will likely crash
 #[cfg(test)]
 mod tests {
