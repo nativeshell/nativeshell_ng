@@ -59,6 +59,18 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+      - name:  Run cargo clippy (android)
+        if: (matrix.os == 'ubuntu-latest')
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --target=armv7-linux-androideabi -- -D warnings
+      - name:  Run cargo clippy (iOS)
+        if: (matrix.os == 'macos-latest')
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --target=aarch64-apple-ios -- -D warnings
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
