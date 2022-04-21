@@ -187,6 +187,8 @@ class Serializer {
 }
 
 class Deserializer {
+  const Deserializer();
+
   Object? deserialize(ByteData data, List attachments,
       FinalizableHandleProvider finalizableHandleProvider) {
     final buffer = ReadBuffer(data);
