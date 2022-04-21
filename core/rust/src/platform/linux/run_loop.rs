@@ -22,7 +22,7 @@ pub struct PlatformRunLoop {
 pub struct Continue(pub bool);
 unsafe extern "C" fn trampoline<F: FnMut() -> gboolean + 'static>(func: gpointer) -> gboolean {
     let func: &RefCell<F> = &*(func as *const RefCell<F>);
-    (&mut *func.borrow_mut())()
+    (*func.borrow_mut())()
 }
 
 fn into_raw<F: FnMut() -> gboolean + 'static>(func: F) -> gpointer {
