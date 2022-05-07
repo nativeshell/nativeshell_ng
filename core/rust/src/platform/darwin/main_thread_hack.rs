@@ -14,7 +14,6 @@ extern "C" {
     static mut _CFMainPThread: usize;
     fn _CFRunLoopSetCurrent(roop: CFRunLoopRef);
     fn pthread_self() -> usize;
-    fn _dispatch_get_main_queue_handle_4CF() -> usize;
     fn class_getClassMethod(cls: *const Class, sel: Sel) -> *mut Method;
 }
 
