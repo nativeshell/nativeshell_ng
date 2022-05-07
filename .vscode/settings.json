@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.runnableEnv": {
+        "RUST_TEST_THREADS": 1,
+    }
+}

@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync() {
+    fn test_async() {
         let run_loop = Rc::new(RunLoop::new());
         let w = wait(run_loop.clone(), Duration::from_millis(50));
         let run_loop_clone = run_loop.clone();
