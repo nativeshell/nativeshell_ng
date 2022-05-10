@@ -2,7 +2,7 @@ use std::{cell::Ref, fmt::Display};
 
 use once_cell::sync::OnceCell;
 
-use crate::{Context, IsolateId, MessageChannel, Value, RunLoopSender};
+use crate::{Context, IsolateId, MessageChannel, RunLoopSender, Value};
 
 #[derive(Debug)]
 pub enum SendMessageError {
