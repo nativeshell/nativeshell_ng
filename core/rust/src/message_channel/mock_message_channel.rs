@@ -13,14 +13,18 @@ use crate::{
     MethodCallError, PlatformResult, Value,
 };
 
-pub struct MockIsolate {
-    handlers: RefCell<HashMap<String, Box<dyn Fn(Value, Option<Box<dyn FnOnce(Value)>>)>>>,
-}
-
 #[derive(Debug)]
 pub struct MockMethodCall {
     pub method: String,
     pub args: Value,
+}
+
+/// Represents mock version of dart isolate.
+///
+/// You can register message and method handlers for channels and then
+/// call `attach` to bind the mock isolate to [MessageChannel].
+pub struct MockIsolate {
+    handlers: RefCell<HashMap<String, Box<dyn Fn(Value, Option<Box<dyn FnOnce(Value)>>)>>>,
 }
 
 impl MockIsolate {
@@ -73,21 +77,23 @@ impl MockIsolate {
         });
     }
 
-    pub fn apply(self, channel: &MessageChannel) -> Rc<RegisteredMockIsolate> {
+    pub fn attach(self, channel: &MessageChannel) -> Rc<AttachedMockIsolate> {
         let isolate_id = channel.inner.register_isolate(self);
-        Rc::new(RegisteredMockIsolate {
+        Rc::new(AttachedMockIsolate {
             isolate_id,
             channel: Rc::downgrade(&channel.inner),
         })
     }
 }
 
-pub struct RegisteredMockIsolate {
+/// Isolate attached to a message channel. Can be used to send messages
+/// to message channel (like a Dart isolate).
+pub struct AttachedMockIsolate {
     isolate_id: IsolateId,
     channel: Weak<MessageChannelInner>,
 }
 
-impl RegisteredMockIsolate {
+impl AttachedMockIsolate {
     pub fn isolate_id(&self) -> IsolateId {
         self.isolate_id
     }
@@ -105,10 +111,12 @@ impl RegisteredMockIsolate {
                 let delegate = delegates.get(&channel);
                 match delegate {
                     Some(delegate) => {
+                        let isolate_id = self.isolate_id;
                         delegate.on_message(
                             self.isolate_id,
                             message,
                             Box::new(move |value| {
+                                MessageChannel::attach_finalizable_handles(&value, isolate_id);
                                 reply(Ok(value));
                                 true
                             }),
@@ -161,7 +169,7 @@ impl RegisteredMockIsolate {
     }
 }
 
-impl Drop for RegisteredMockIsolate {
+impl Drop for AttachedMockIsolate {
     fn drop(&mut self) {
         if let Some(channel) = self.channel.upgrade() {
             channel.unregister_isolate(self.isolate_id);
@@ -177,34 +185,13 @@ impl MessageChannel {
     fn new() -> Self {
         RUN_LOOP_SENDER
             .set(Context::get().run_loop().new_sender())
-            .map_err(|_| ())
-            .expect("Message channel already initialized");
+            .ok();
         Self {
             inner: Rc::new(MessageChannelInner {
                 next_isolate: Cell::new(1),
                 isolates: RefCell::new(HashMap::new()),
                 delegates: RefCell::new(HashMap::new()),
             }),
-        }
-    }
-
-    fn attach_finalizable_handles(value: &Value, isolate: IsolateId) {
-        match value {
-            Value::FinalizableHandle(value) => {
-                value.attach(isolate);
-            }
-            Value::Map(map) => {
-                for e in map.iter() {
-                    Self::attach_finalizable_handles(&e.0, isolate);
-                    Self::attach_finalizable_handles(&e.1, isolate);
-                }
-            }
-            Value::List(list) => {
-                for e in list {
-                    Self::attach_finalizable_handles(e, isolate);
-                }
-            }
-            _ => {}
         }
     }
 
@@ -273,6 +260,26 @@ impl MessageChannel {
 
     pub fn unregister_delegate(&self, channel: &str) {
         self.inner.delegates.borrow_mut().remove(channel);
+    }
+
+    fn attach_finalizable_handles(value: &Value, isolate: IsolateId) {
+        match value {
+            Value::FinalizableHandle(value) => {
+                value.attach(isolate);
+            }
+            Value::Map(map) => {
+                for e in map.iter() {
+                    Self::attach_finalizable_handles(&e.0, isolate);
+                    Self::attach_finalizable_handles(&e.1, isolate);
+                }
+            }
+            Value::List(list) => {
+                for e in list {
+                    Self::attach_finalizable_handles(e, isolate);
+                }
+            }
+            _ => {}
+        }
     }
 
     pub(crate) fn request_update_external_size(&self, _target_isolate: IsolateId, _handle: isize) {}

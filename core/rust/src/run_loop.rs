@@ -17,7 +17,7 @@ use futures::{
     FutureExt,
 };
 
-use crate::util::BlockingVariable;
+use crate::util::{BlockingVariable, FutureCompleter};
 
 use super::{
     platform::run_loop::{PlatformRunLoop, PlatformRunLoopSender},
@@ -47,13 +47,23 @@ impl RunLoop {
         })
     }
 
-    // Convenience method to schedule callback on next run loop turn
+    /// Convenience method to schedule callback on next run loop turn.
     #[must_use]
     pub fn schedule_next<F>(&self, callback: F) -> Handle
     where
         F: FnOnce() + 'static,
     {
         self.schedule(Duration::from_secs(0), callback)
+    }
+
+    /// Returns empty future that will complete in provided duration.
+    pub async fn wait(&self, duration: Duration) {
+        let (future, completer) = FutureCompleter::<()>::new();
+        self.schedule(duration, move || {
+            completer.complete(());
+        })
+        .detach();
+        future.await
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]

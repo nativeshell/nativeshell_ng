@@ -78,6 +78,18 @@ impl Context {
     pub fn current() -> Option<Self> {
         CURRENT_CONTEXT.with(|c| c.borrow().as_ref().map(|c| c.clone()))
     }
+
+    #[cfg(feature = "mock")]
+    /// Helper function for unit tests. Will create temporary context,
+    /// run the future in run loop and wait until completed.
+    pub fn run_test(future: impl futures::Future + 'static) {
+        let context = Context::new();
+        Context::get().run_loop().spawn(async {
+            future.await;
+            Context::get().run_loop().stop();
+        });
+        context.run_loop().run();
+    }
 }
 
 thread_local! {
