@@ -18,7 +18,7 @@ extern "C" {
 }
 
 extern "C" fn is_main_thread(_class: &Class, _sel: Sel) -> bool {
-    return unsafe { FAKE_MAIN_THREAD == pthread_self() };
+    unsafe { FAKE_MAIN_THREAD == pthread_self() }
 }
 
 static NS_THREAD_REPLACEMENT: Lazy<&'static Class> = Lazy::new(|| unsafe {

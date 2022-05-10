@@ -1,5 +1,9 @@
 {
     "rust-analyzer.runnableEnv": {
         "RUST_TEST_THREADS": 1,
-    }
+    },
+    "rust-analyzer.cargo.allFeatures": false,
+    "rust-analyzer.cargo.features": [
+        "mock"
+    ]
 }

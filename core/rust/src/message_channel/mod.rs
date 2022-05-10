@@ -1,20 +1,19 @@
 use std::ffi::c_void;
 
-use crate::{
-    attach_weak_persistent_handle, ffi::nativeshell_init_ffi, update_persistent_handle_size,
-};
-
-use self::{
-    message_channel::{post_message, register_isolate},
-    native_vector::*,
-};
-
 mod async_method_handler;
-mod codec;
 mod event_channel;
-mod message_channel;
 mod method_handler;
+
+#[cfg(not(feature = "mock"))]
+mod codec;
+#[cfg(not(feature = "mock"))]
+mod message_channel;
+#[cfg(not(feature = "mock"))]
 mod native_vector;
+
+#[cfg(feature = "mock")]
+#[path = "mock_message_channel.rs"]
+mod message_channel;
 
 pub use async_method_handler::*;
 pub use event_channel::*;
@@ -25,6 +24,7 @@ pub use method_handler::*;
 pub type IsolateId = i64;
 
 #[repr(C)]
+#[cfg(not(feature = "mock"))]
 struct MessageChannelContext {
     size: isize,
     ffi_data: *mut c_void,
@@ -62,7 +62,15 @@ pub enum FunctionResult {
 
 #[no_mangle]
 #[inline(never)]
+#[cfg(not(feature = "mock"))]
 pub extern "C" fn nativeshell_init_message_channel_context(data: *mut c_void) -> FunctionResult {
+    use crate::{
+        ffi::nativeshell_init_ffi, finalizable_handle_native::attach_weak_persistent_handle,
+        finalizable_handle_native::update_persistent_handle_size,
+    };
+
+    use self::native_vector::*;
+
     let context = data as *mut MessageChannelContext;
     let context = unsafe { &mut *context };
     if context.size != std::mem::size_of::<MessageChannelContext>() as isize {
@@ -94,5 +102,12 @@ pub extern "C" fn nativeshell_init_message_channel_context(data: *mut c_void) ->
     context.free_vec_f64 = free_vec_f64 as *mut _;
     context.resize_vec_u8 = resize_vec_u8 as *mut _;
 
+    FunctionResult::NoError
+}
+
+#[no_mangle]
+#[inline(never)]
+#[cfg(feature = "mock")]
+pub extern "C" fn nativeshell_init_message_channel_context(_data: *mut c_void) -> FunctionResult {
     FunctionResult::NoError
 }

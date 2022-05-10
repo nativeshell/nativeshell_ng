@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    ffi::c_void,
     sync::{
         atomic::{AtomicIsize, Ordering},
         Mutex, MutexGuard,
@@ -10,16 +9,15 @@ use std::{
 use once_cell::sync::OnceCell;
 
 use crate::{
-    ffi::{DartFunctions, DartHandle, DartWeakPersistentHandle},
-    util::Capsule,
-    Context, GetMessageChannel, IsolateId, RUN_LOOP_SENDER,
+    ffi::DartWeakPersistentHandle, util::Capsule, Context, GetMessageChannel, IsolateId,
+    RUN_LOOP_SENDER,
 };
 
 ///
 /// FinalizableHandle can be used as payload in [`super::Value::FinalizableHandle`].
 /// Will be received in Dart as instance of `FinalizableHandle`. When the Dart
 /// instance gets garbage collected, the `finalizer` closure specified in
-///  [`FinalizableHandle::new] will be invoked.
+/// [`FinalizableHandle::new] will be invoked.
 ///
 /// FinalizableHandle must be created on main thread, but other methods are thread safe.
 ///
@@ -44,7 +42,7 @@ impl FinalizableHandle {
     ///
     pub fn new<F: FnOnce() + 'static>(external_size: isize, finalizer: F) -> Self {
         let id = next_handle();
-        let mut state = State::get();
+        let mut state = FinalizableHandleState::get();
         state.objects.insert(
             id,
             FinalizableObjectState {
@@ -64,7 +62,7 @@ impl FinalizableHandle {
     /// initially and becomes `true` once the Finalizable handle is send to Dart.
     /// `false` after the Dart counterpart gets garbage collected.
     pub fn is_attached(&self) -> bool {
-        let state = State::get();
+        let state = FinalizableHandleState::get();
         state
             .objects
             .get(&self.id)
@@ -74,13 +72,13 @@ impl FinalizableHandle {
 
     /// Whether the Dart object was already garbage collected finalized.
     pub fn is_finalized(&self) -> bool {
-        let state = State::get();
-        state.objects.contains_key(&self.id)
+        let state = FinalizableHandleState::get();
+        !state.objects.contains_key(&self.id)
     }
 
     /// Updates the external size. This is a hint to Dart garbage collector.
     pub fn update_size(&self, size: isize) {
-        let mut state = State::get();
+        let mut state = FinalizableHandleState::get();
         let object = state.objects.get_mut(&self.id);
         if let Some(object) = object {
             object.external_size = size;
@@ -100,6 +98,34 @@ impl FinalizableHandle {
             }
         }
     }
+
+    #[cfg(feature = "mock")]
+    /// Attaches object to given isolate
+    pub(crate) fn attach(&self, isolate_id: IsolateId) {
+        let mut state = FinalizableHandleState::get();
+        let object = state.objects.get_mut(&self.id);
+        if let Some(object) = object {
+            object.isolate_id = Some(isolate_id);
+        }
+    }
+
+    #[cfg(feature = "mock")]
+    /// Allows simulating object finalizers
+    pub fn finalize(&self) {
+        let mut state = FinalizableHandleState::get();
+        let mut object = state.objects.remove(&self.id);
+        if let Some(mut object) = object.take() {
+            if let Some(mut finalizer) = object.finalizer.take() {
+                let sender = RUN_LOOP_SENDER
+                    .get()
+                    .expect("MessageChannel was not initialized!");
+                sender.send(move || {
+                    let finalizer = finalizer.take().unwrap();
+                    finalizer();
+                });
+            }
+        }
+    }
 }
 
 //
@@ -108,7 +134,7 @@ impl FinalizableHandle {
 
 impl Drop for FinalizableHandle {
     fn drop(&mut self) {
-        let mut state = State::get();
+        let mut state = FinalizableHandleState::get();
         let object = state.objects.get_mut(&self.id);
         let mut has_handle = true;
         if let Some(object) = object {
@@ -127,21 +153,54 @@ impl Drop for FinalizableHandle {
     }
 }
 
-struct State {
+pub(crate) struct FinalizableHandleState {
     objects: HashMap<isize, FinalizableObjectState>,
 }
 
-impl State {
+impl FinalizableHandleState {
     fn new() -> Self {
         Self {
             objects: HashMap::new(),
         }
     }
 
-    fn get() -> MutexGuard<'static, Self> {
-        static FUNCTIONS: OnceCell<Mutex<State>> = OnceCell::new();
-        let state = FUNCTIONS.get_or_init(|| Mutex::new(State::new()));
+    pub(crate) fn get() -> MutexGuard<'static, Self> {
+        static FUNCTIONS: OnceCell<Mutex<FinalizableHandleState>> = OnceCell::new();
+        let state = FUNCTIONS.get_or_init(|| Mutex::new(FinalizableHandleState::new()));
         state.lock().unwrap()
+    }
+
+    #[cfg(feature = "mock")]
+    pub(crate) fn finalize_all(&mut self, isolate: IsolateId) {
+        // TODO(knopp) use drain_filter once stable
+        let to_remove: Vec<_> = self
+            .objects
+            .iter()
+            .filter_map(|(id, object)| {
+                if object.isolate_id == Some(isolate) {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let finalizers: Vec<_> = to_remove
+            .iter()
+            .filter_map(|id| self.objects.remove(id))
+            .filter_map(|mut f| f.finalizer.take())
+            .collect();
+
+        if !finalizers.is_empty() {
+            RUN_LOOP_SENDER
+                .get()
+                .expect("MessageChannel was not initialized!")
+                .send(move || {
+                    for mut f in finalizers {
+                        f.take().unwrap()();
+                    }
+                });
+        }
     }
 }
 
@@ -168,73 +227,85 @@ impl Drop for FinalizableObjectState {
     }
 }
 
-fn finalize_handle(handle: isize) {
-    let object_state = {
-        let mut state = State::get();
-        state.objects.remove(&handle)
-    };
-    if let Some(mut object_state) = object_state {
-        let mut finalizer = object_state
-            .finalizer
-            .take()
-            .expect("Finalizer executed more than once");
-        let finalizer = finalizer.take().unwrap();
-        finalizer();
-    }
-}
+#[cfg(not(feature = "mock"))]
+pub(crate) mod finalizable_handle_native {
+    use std::ffi::c_void;
 
-unsafe extern "C" fn finalizer(_isolate_callback_data: *mut c_void, peer: *mut c_void) {
-    let handle = peer as isize;
-    let mut state = State::get();
-    let object = state.objects.get_mut(&handle);
-    if let Some(object) = object {
-        if let Some(handle) = object.handle.take() {
-            (DartFunctions::get().delete_weak_persistent_handle)(handle.0);
+    use crate::{
+        ffi::{DartFunctions, DartHandle},
+        IsolateId, RUN_LOOP_SENDER,
+    };
+
+    use super::{FinalizableHandleState, Movable};
+
+    fn finalize_handle(handle: isize) {
+        let object_state = {
+            let mut state = FinalizableHandleState::get();
+            state.objects.remove(&handle)
+        };
+        if let Some(mut object_state) = object_state {
+            let mut finalizer = object_state
+                .finalizer
+                .take()
+                .expect("Finalizer executed more than once");
+            let finalizer = finalizer.take().unwrap();
+            finalizer();
         }
     }
-    let sender = RUN_LOOP_SENDER
-        .get()
-        .expect("MessageChannel was not initialized!");
-    sender.send(move || {
-        finalize_handle(handle);
-    });
-}
 
-pub(crate) unsafe extern "C" fn attach_weak_persistent_handle(
-    handle: DartHandle,
-    id: isize,
-    null_handle: DartHandle,
-    isolate_id: IsolateId,
-) -> DartHandle {
-    let mut state = State::get();
-    let object = state.objects.get_mut(&id);
-    if let Some(object) = object {
-        if let Some(handle) = object.handle.as_mut() {
-            let real_handle = (DartFunctions::get().handle_from_weak_persistent)(handle.0);
-            // Try to return existing object if there is any
-            if !real_handle.is_null() {
-                return real_handle;
+    unsafe extern "C" fn finalizer(_isolate_callback_data: *mut c_void, peer: *mut c_void) {
+        let handle = peer as isize;
+        let mut state = FinalizableHandleState::get();
+        let object = state.objects.get_mut(&handle);
+        if let Some(object) = object {
+            if let Some(handle) = object.handle.take() {
+                (DartFunctions::get().delete_weak_persistent_handle)(handle.0);
             }
         }
-        let weak_handle = (DartFunctions::get().new_weak_persistent_handle)(
-            handle,
-            id as *mut c_void,
-            object.external_size,
-            finalizer,
-        );
-        object.handle = Some(Movable(weak_handle));
-        object.isolate_id = Some(isolate_id);
-        return handle;
+        let sender = RUN_LOOP_SENDER
+            .get()
+            .expect("MessageChannel was not initialized!");
+        sender.send(move || {
+            finalize_handle(handle);
+        });
     }
-    null_handle
-}
 
-pub(crate) unsafe extern "C" fn update_persistent_handle_size(id: isize) {
-    let mut state = State::get();
-    let object = state.objects.get_mut(&id);
-    if let Some(object) = object {
-        if let Some(handle) = object.handle.as_mut() {
-            (DartFunctions::get().update_external_size)(handle.0, object.external_size);
+    pub(crate) unsafe extern "C" fn attach_weak_persistent_handle(
+        handle: DartHandle,
+        id: isize,
+        null_handle: DartHandle,
+        isolate_id: IsolateId,
+    ) -> DartHandle {
+        let mut state = FinalizableHandleState::get();
+        let object = state.objects.get_mut(&id);
+        if let Some(object) = object {
+            if let Some(handle) = object.handle.as_mut() {
+                let real_handle = (DartFunctions::get().handle_from_weak_persistent)(handle.0);
+                // Try to return existing object if there is any
+                if !real_handle.is_null() {
+                    return real_handle;
+                }
+            }
+            let weak_handle = (DartFunctions::get().new_weak_persistent_handle)(
+                handle,
+                id as *mut c_void,
+                object.external_size,
+                finalizer,
+            );
+            object.handle = Some(Movable(weak_handle));
+            object.isolate_id = Some(isolate_id);
+            return handle;
+        }
+        null_handle
+    }
+
+    pub(crate) unsafe extern "C" fn update_persistent_handle_size(id: isize) {
+        let mut state = FinalizableHandleState::get();
+        let object = state.objects.get_mut(&id);
+        if let Some(object) = object {
+            if let Some(handle) = object.handle.as_mut() {
+                (DartFunctions::get().update_external_size)(handle.0, object.external_size);
+            }
         }
     }
 }
