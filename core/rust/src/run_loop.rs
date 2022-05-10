@@ -56,7 +56,7 @@ impl RunLoop {
         self.schedule(Duration::from_secs(0), callback)
     }
 
-    /// Returns empty future that will complete in provided duration.
+    /// Returns future that will complete in provided duration.
     pub async fn wait(&self, duration: Duration) {
         let (future, completer) = FutureCompleter::<()>::new();
         self.schedule(duration, move || {
