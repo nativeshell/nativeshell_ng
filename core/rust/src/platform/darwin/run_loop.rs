@@ -213,7 +213,7 @@ impl PlatformRunLoop {
 
     #[cfg(target_os = "macos")]
     pub fn run(&self) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "mock"))]
         {
             super::main_thread_hack::ensure_ns_app_thinks_it_is_main_thread();
         }

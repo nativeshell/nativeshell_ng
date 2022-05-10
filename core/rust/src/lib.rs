@@ -2,6 +2,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::identity_op)]
 #![allow(clippy::module_inception)]
+#![allow(clippy::bool_assert_comparison)]
 
 mod context;
 pub mod ffi;

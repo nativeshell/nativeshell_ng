@@ -20,3 +20,5 @@ objc = "0.2.7"
 
 [features]
 derive = ["nativeshell_derive"]
+# Allows mocking MessageChannel in unit tests
+mock = []

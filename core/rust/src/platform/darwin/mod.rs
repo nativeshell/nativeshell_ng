@@ -1,4 +1,4 @@
-#[cfg(all(test, target_os = "macos"))]
+#[cfg(all(any(test, feature = "mock"), target_os = "macos"))]
 mod main_thread_hack;
 
 pub mod run_loop;
