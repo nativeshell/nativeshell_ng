@@ -6,6 +6,8 @@ use std::{
     time::Duration,
 };
 
+use crate::Context;
+
 use super::sys::glib::*;
 
 type SourceId = c_uint;
@@ -115,6 +117,15 @@ impl PlatformRunLoopSender {
     where
         F: FnOnce() + 'static + Send,
     {
+        // This is to ensure consistent behavior on all platforms. When invoked on main thread
+        // the code below (g_main_context_invoke_full) would call the function synchronously,
+        // which is not expected and may lead to deadlocks.
+        let context = Context::current();
+        if let Some(context) = context {
+            context.run_loop().schedule_next(callback).detach();
+            return;
+        }
+
         unsafe extern "C" fn trampoline<F: FnOnce() + 'static>(func: gpointer) -> gboolean {
             let func: &mut Option<F> = &mut *(func as *mut Option<F>);
             let func = func
