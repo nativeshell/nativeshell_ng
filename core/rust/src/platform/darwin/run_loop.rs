@@ -1,10 +1,13 @@
 use core_foundation::{
-    base::TCFType,
+    base::{kCFAllocatorDefault, TCFType},
     date::CFAbsoluteTimeGetCurrent,
     runloop::{
-        kCFRunLoopCommonModes, CFRunLoopAddTimer, CFRunLoopGetMain, CFRunLoopRemoveTimer,
-        CFRunLoopTimer, CFRunLoopTimerContext, CFRunLoopTimerRef,
+        kCFRunLoopCommonModes, CFRunLoopAddSource, CFRunLoopAddTimer, CFRunLoopGetMain,
+        CFRunLoopRemoveTimer, CFRunLoopSource, CFRunLoopSourceContext, CFRunLoopSourceCreate,
+        CFRunLoopSourceSignal, CFRunLoopTimer, CFRunLoopTimerContext, CFRunLoopTimerRef,
+        CFRunLoopWakeUp,
     },
+    string::CFStringRef,
 };
 
 use std::{
@@ -18,6 +21,7 @@ use std::{
 
 #[cfg(target_os = "macos")]
 use super::sys::cocoa::*;
+use super::sys::to_nsstring;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 
@@ -35,6 +39,7 @@ struct State {
     callbacks: Vec<Callback>,
     timers: HashMap<HandleType, Timer>,
     timer: Option<CFRunLoopTimer>,
+    source: Option<CFRunLoopSource>,
 }
 
 // CFRunLoopTimer is thread safe
@@ -58,6 +63,7 @@ impl State {
             callbacks: Vec::new(),
             timers: HashMap::new(),
             timer: None,
+            source: None,
         }
     }
 
@@ -91,6 +97,62 @@ impl State {
         }
     }
 
+    fn create_source(&mut self, state: Arc<Mutex<State>>) {
+        let mutex = Arc::as_ptr(&state);
+        let mut context = CFRunLoopSourceContext {
+            version: 0,
+            info: mutex as *mut c_void,
+            retain: Some(Self::retain),
+            release: Some(Self::release),
+            copyDescription: None,
+            equal: None,
+            hash: None,
+            schedule: None,
+            cancel: None,
+            perform: Self::on_source,
+        };
+        let source: CFRunLoopSource = unsafe {
+            let source_ref = CFRunLoopSourceCreate(kCFAllocatorDefault, 0, &mut context as *mut _);
+            TCFType::wrap_under_create_rule(source_ref)
+        };
+        unsafe {
+            CFRunLoopAddSource(
+                CFRunLoopGetMain(),
+                source.as_concrete_TypeRef(),
+                kCFRunLoopCommonModes,
+            );
+            // Register source with custom RunLoopMode. This lets clients to only process
+            // events scheduled through RunLoopSender (which also includes MessageChannel).
+            let mode = to_nsstring("NativeShellRunLoopMode");
+            CFRunLoopAddSource(
+                CFRunLoopGetMain(),
+                source.as_concrete_TypeRef(),
+                *mode as CFStringRef,
+            );
+        }
+        self.source = Some(source);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn destroy_source(&mut self) {
+        use core_foundation::runloop::CFRunLoopRemoveSource;
+        if let Some(source) = self.source.take() {
+            unsafe {
+                CFRunLoopRemoveSource(
+                    CFRunLoopGetMain(),
+                    source.as_concrete_TypeRef(),
+                    kCFRunLoopCommonModes,
+                );
+                let mode = to_nsstring("NativeShellRunLoopMode");
+                CFRunLoopRemoveSource(
+                    CFRunLoopGetMain(),
+                    source.as_concrete_TypeRef(),
+                    *mode as CFStringRef,
+                )
+            };
+        }
+    }
+
     fn next_instant(&self) -> Instant {
         if !self.callbacks.is_empty() {
             Instant::now()
@@ -103,30 +165,45 @@ impl State {
     fn schedule(&mut self, state: Arc<Mutex<State>>) {
         self.unschedule();
 
-        let next = self.next_instant();
-        let pending = next.saturating_duration_since(Instant::now());
-        let fire_date = unsafe { CFAbsoluteTimeGetCurrent() } + pending.as_secs_f64();
+        if !self.callbacks.is_empty() {
+            if self.source.is_none() {
+                self.create_source(state);
+            }
+            unsafe {
+                CFRunLoopSourceSignal(
+                    self.source
+                        .as_ref()
+                        .expect("Failed to create source")
+                        .as_concrete_TypeRef(),
+                );
+                CFRunLoopWakeUp(CFRunLoopGetMain());
+            }
+        } else {
+            let mutex = Arc::as_ptr(&state);
+            let next = self.next_instant();
+            let pending = next.saturating_duration_since(Instant::now());
+            let fire_date = unsafe { CFAbsoluteTimeGetCurrent() } + pending.as_secs_f64();
 
-        let mutex = Arc::as_ptr(&state);
+            let mut context = CFRunLoopTimerContext {
+                version: 0,
+                info: mutex as *mut c_void,
+                retain: Some(Self::retain),
+                release: Some(Self::release),
+                copyDescription: None,
+            };
 
-        let mut context = CFRunLoopTimerContext {
-            version: 0,
-            info: mutex as *mut c_void,
-            retain: Some(Self::retain),
-            release: Some(Self::release),
-            copyDescription: None,
-        };
-
-        let timer =
-            CFRunLoopTimer::new(fire_date, 0.0, 0, 0, Self::on_timer, &mut context as *mut _);
-        self.timer = Some(timer.clone());
-        unsafe {
-            CFRunLoopAddTimer(
-                CFRunLoopGetMain(),
-                timer.as_concrete_TypeRef(),
-                kCFRunLoopCommonModes,
-            )
-        };
+            let timer =
+                CFRunLoopTimer::new(fire_date, 0.0, 0, 0, Self::on_timer, &mut context as *mut _);
+            self.timer = Some(timer.clone());
+            unsafe {
+                CFRunLoopAddTimer(
+                    CFRunLoopGetMain(),
+                    timer.as_concrete_TypeRef(),
+                    kCFRunLoopCommonModes,
+                );
+                CFRunLoopWakeUp(CFRunLoopGetMain());
+            };
+        }
     }
 
     extern "C" fn retain(data: *const c_void) -> *const c_void {
@@ -141,6 +218,13 @@ impl State {
     }
 
     extern "C" fn on_timer(_timer: CFRunLoopTimerRef, data: *mut c_void) {
+        let state = data as *const Mutex<State>;
+        let state = unsafe { Arc::from_raw(state) };
+        Self::poll(state.clone());
+        let _ = ManuallyDrop::new(state);
+    }
+
+    extern "C" fn on_source(data: *const c_void) {
         let state = data as *const Mutex<State>;
         let state = unsafe { Arc::from_raw(state) };
         Self::poll(state.clone());
@@ -227,6 +311,7 @@ impl PlatformRunLoop {
     #[cfg(target_os = "macos")]
     pub fn stop(&self) {
         self.state.lock().unwrap().unschedule();
+        self.state.lock().unwrap().destroy_source();
 
         unsafe {
             let app = NSApplication::sharedApplication(nil);
