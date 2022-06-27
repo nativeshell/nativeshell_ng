@@ -197,8 +197,8 @@ impl Serializer {
                 }
             }
             Value::F64(n) => {
-                writer.align_to(8);
                 writer.write_u8(VALUE_FLOAT64);
+                writer.align_to(8);
                 writer.write_f64(n);
             }
             Value::String(v) => {
