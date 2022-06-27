@@ -3,9 +3,9 @@ use core_foundation::{
     date::CFAbsoluteTimeGetCurrent,
     runloop::{
         kCFRunLoopCommonModes, CFRunLoopAddSource, CFRunLoopAddTimer, CFRunLoopGetMain,
-        CFRunLoopRemoveSource, CFRunLoopRemoveTimer, CFRunLoopSource, CFRunLoopSourceContext,
-        CFRunLoopSourceCreate, CFRunLoopSourceSignal, CFRunLoopTimer, CFRunLoopTimerContext,
-        CFRunLoopTimerRef, CFRunLoopWakeUp,
+        CFRunLoopRemoveTimer, CFRunLoopSource, CFRunLoopSourceContext, CFRunLoopSourceCreate,
+        CFRunLoopSourceSignal, CFRunLoopTimer, CFRunLoopTimerContext, CFRunLoopTimerRef,
+        CFRunLoopWakeUp,
     },
     string::CFStringRef,
 };
@@ -135,6 +135,7 @@ impl State {
 
     #[cfg(target_os = "macos")]
     fn destroy_source(&mut self) {
+        use core_foundation::runloop::CFRunLoopRemoveSource;
         if let Some(source) = self.source.take() {
             unsafe {
                 CFRunLoopRemoveSource(
