@@ -199,6 +199,10 @@ impl<T: MethodHandler> RegisteredMethodHandler<T> {
         res
     }
 
+    pub fn handler(&self) -> Rc<RefCell<T>> {
+        self.inner.handler.clone()
+    }
+
     pub fn borrow(&self) -> Ref<T> {
         self.inner.handler.borrow()
     }
