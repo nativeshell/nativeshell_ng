@@ -21,9 +21,10 @@ use std::{
 
 #[cfg(target_os = "macos")]
 use super::sys::cocoa::*;
-use super::sys::to_nsstring;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
+
+use super::sys::to_nsstring;
 
 pub type HandleType = usize;
 pub const INVALID_HANDLE: HandleType = 0;
