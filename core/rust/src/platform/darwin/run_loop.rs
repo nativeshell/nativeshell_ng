@@ -237,11 +237,10 @@ impl State {
         for c in execution.callbacks {
             c();
         }
-        let had_timers = !execution.timers.is_empty();
         for t in execution.timers {
             (t.callback)();
         }
-        if had_timers {
+        if !state.lock().unwrap().timers.is_empty() {
             let state_clone = state.clone();
             state.lock().unwrap().schedule(state_clone);
         }
