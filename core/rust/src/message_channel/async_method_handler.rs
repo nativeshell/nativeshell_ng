@@ -98,6 +98,61 @@ impl AsyncMethodInvoker {
 
         future.await
     }
+
+    //
+    // Synchronous versions
+    //
+
+    /// Convenience call method that will attempt to convert the result to specified type.
+    pub fn call_method_sync_cv<
+        V: Into<Value>,
+        F, //
+        T: TryFrom<Value, Error = E>,
+        E: Into<TryFromError>,
+    >(
+        &self,
+        target_isolate: IsolateId,
+        method: &str,
+        args: V,
+        reply: F,
+    ) where
+        F: FnOnce(Result<T, MethodCallError>) + 'static,
+    {
+        self.call_method_sync(target_isolate, method, args, |r| {
+            let res = match r {
+                Ok(value) => value
+                    .try_into()
+                    .map_err(|e: E| MethodCallError::ConversionError(e.into())),
+                Err(err) => Err(err),
+            };
+            reply(res);
+        });
+    }
+
+    pub fn call_method_sync<V: Into<Value>, F>(
+        &self,
+        target_isolate: IsolateId,
+        method: &str,
+        args: V,
+        reply: F,
+    ) where
+        F: FnOnce(Result<Value, MethodCallError>) + 'static,
+    {
+        let args: Value = args.into();
+        let call: Value = vec![Value::String(method.into()), args].into();
+        Context::get().message_channel().send_message(
+            target_isolate,
+            &self.channel_name,
+            call,
+            move |res| match res {
+                Ok(value) => {
+                    let result = unpack_result(value).expect("Malformed message");
+                    reply(result);
+                }
+                Err(err) => reply(Err(MethodCallError::SendError(err))),
+            },
+        );
+    }
 }
 
 pub struct RegisteredAsyncMethodHandler<T: AsyncMethodHandler> {
