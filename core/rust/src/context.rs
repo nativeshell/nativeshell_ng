@@ -22,25 +22,32 @@ pub struct ContextInternal {
 }
 
 impl Context {
-    /// Creates a new context. The will be be associated with current and can be retrieved
-    /// at any point while the instance is in scope by [`Context::get()`].
+    /// Creates a new context. The will be be associated with current thread and can
+    /// be retrieved at any point while the instance is in scope by [`Context::get()`].
     ///
     /// Any NativeShell application must have exactly one context active.
     pub fn new() -> Self {
+        let internal = Rc::new(ContextInternal {
+            run_loop: RunLoop::new(),
+            attachments: RefCell::new(HashMap::new()),
+        });
         let res = Self {
-            internal: Rc::new(ContextInternal {
-                run_loop: RunLoop::new(),
-                attachments: RefCell::new(HashMap::new()),
-            }),
+            internal: internal.clone(),
+            outermost: true,
+        };
+        let res_fallback = Self {
+            internal,
             outermost: true,
         };
         ffi_methods();
-        let prev_context = CURRENT_CONTEXT.with(|c| c.replace(Some(res.clone())));
+        let result = res.clone();
+        let prev_context = CURRENT_CONTEXT.with(|c| c.replace(Some(res)));
         if prev_context.is_some() {
             panic!("another context is already associated with current thread.");
         }
-        res.message_channel();
-        res
+        CURRENT_CONTEXT_FALLBACK.with(|c| c.replace(Some(res_fallback)));
+        result.message_channel();
+        result
     }
 
     pub fn run_loop(&self) -> &RunLoop {
@@ -76,7 +83,18 @@ impl Context {
 
     /// Returns context associated with current thread.
     pub fn current() -> Option<Self> {
-        CURRENT_CONTEXT.with(|c| c.borrow().as_ref().map(|c| c.clone()))
+        // It is necessary to be able to access Context::current() while thread locals
+        // are being destructed in case attachment destructor wants to access context.
+        // Which ever thread local is removed first will clean the attachment.
+        let res = CURRENT_CONTEXT.try_with(|c| c.borrow().as_ref().map(|c| c.clone()));
+        match res {
+            Ok(res) => res,
+            // (Can happen if attachment accesses context during destruction.)
+            // CURRENT_CONTEXT is being destroyed, use the fallback; Reverse situation
+            // can not happen because attachments will be removed by CURRENT_CONTEXT_FALLBACK
+            // destructor.
+            Err(_) => CURRENT_CONTEXT_FALLBACK.with(|c| c.borrow().as_ref().map(|c| c.clone())),
+        }
     }
 
     #[cfg(feature = "mock")]
@@ -94,13 +112,14 @@ impl Context {
 
 thread_local! {
     static CURRENT_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
+    static CURRENT_CONTEXT_FALLBACK: RefCell<Option<Context>> = RefCell::new(None);
 }
 
 impl Drop for Context {
     fn drop(&mut self) {
         if self.outermost {
             // Remove attachment in reverse order in which they were inserted
-            loop {
+            while self.internal.attachments.borrow().len() > 0 {
                 let to_remove_index = self.internal.attachments.borrow().len() - 1;
                 let to_remove = self
                     .internal
@@ -117,7 +136,8 @@ impl Drop for Context {
                     break;
                 }
             }
-            CURRENT_CONTEXT.with(|c| c.take());
+            CURRENT_CONTEXT.try_with(|c| c.take()).ok();
+            CURRENT_CONTEXT_FALLBACK.try_with(|c| c.take()).ok();
         }
     }
 }
