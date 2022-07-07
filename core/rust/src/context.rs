@@ -130,6 +130,7 @@ impl Drop for Context {
                     .map(|a| *a.0)
                     .expect("Attachment to remove not found");
 
+                // Hold removed item until RefMut gets dropped.
                 let _removed = { self.internal.attachments.borrow_mut().remove(&to_remove) };
 
                 if to_remove_index == 0 {
