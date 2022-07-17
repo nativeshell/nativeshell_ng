@@ -3,9 +3,9 @@ use core_foundation::{
     date::CFAbsoluteTimeGetCurrent,
     runloop::{
         kCFRunLoopCommonModes, CFRunLoopAddSource, CFRunLoopAddTimer, CFRunLoopGetMain,
-        CFRunLoopRemoveTimer, CFRunLoopSource, CFRunLoopSourceContext, CFRunLoopSourceCreate,
-        CFRunLoopSourceSignal, CFRunLoopTimer, CFRunLoopTimerContext, CFRunLoopTimerRef,
-        CFRunLoopWakeUp,
+        CFRunLoopRemoveTimer, CFRunLoopRunInMode, CFRunLoopSource, CFRunLoopSourceContext,
+        CFRunLoopSourceCreate, CFRunLoopSourceSignal, CFRunLoopTimer, CFRunLoopTimerContext,
+        CFRunLoopTimerRef, CFRunLoopWakeUp,
     },
     string::CFStringRef,
 };
@@ -332,6 +332,11 @@ impl PlatformRunLoop {
             // To stop event loop immediately, we need to post event.
             let () = msg_send![app, postEvent: dummy_event atStart: YES];
         }
+    }
+
+    pub fn poll_once(&self) {
+        let mode = to_nsstring("NativeShellRunLoopMode");
+        unsafe { CFRunLoopRunInMode(*mode as CFStringRef, 1.0, 1) };
     }
 
     pub fn new_sender(&self) -> PlatformRunLoopSender {
