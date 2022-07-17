@@ -244,12 +244,12 @@ pub(crate) mod finalizable_handle_native {
             state.objects.remove(&handle)
         };
         if let Some(mut object_state) = object_state {
-            let mut finalizer = object_state
-                .finalizer
-                .take()
-                .expect("Finalizer executed more than once");
-            let finalizer = finalizer.take().unwrap();
-            finalizer();
+            let finalizer = object_state.finalizer.take();
+            // Finalizer may have been removed in FinalizableHandle::drop
+            if let Some(mut finalizer) = finalizer {
+                let finalizer = finalizer.take().unwrap();
+                finalizer();
+            }
         }
     }
 
