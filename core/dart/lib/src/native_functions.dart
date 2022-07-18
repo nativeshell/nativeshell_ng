@@ -66,8 +66,8 @@ class NativeFunctions {
 
   /// Returns default NativeShell functions. This should only be used in
   /// application code, never for plugins. Each plugin should have own function,
-  /// which forwards to the NativeShell call. Otherwise the functions may be
-  /// from wrong module and not have access to module state.
+  /// which forwards to the NativeShell init call. Otherwise the functions may
+  /// be from wrong module and not have access to module state.
   static NativeFunctions getDefault() {
     final dylib = defaultTargetPlatform == TargetPlatform.windows
         ? DynamicLibrary.executable()

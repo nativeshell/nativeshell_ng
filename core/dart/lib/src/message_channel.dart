@@ -55,11 +55,11 @@ typedef MessageSender = Future<dynamic> Function(dynamic message);
 
 typedef MessageChannelContextInitFunction = Int64 Function(Pointer<Void>);
 
-/// Every [MessageChannel] (and on top of [NativeMethodChannel] and
+/// Every [MessageChannel] (and on top of it [NativeMethodChannel] and
 /// [NativeEventChannel]) live within a [MessageChannelContext].
 ///
 /// This context is responsible for taking care of native part of message channel,
-/// or can be used to mock messages [MockMessageChannelContext].
+/// or can be used to mock messages through [MockMessageChannelContext].
 abstract class MessageChannelContext {
   /// Registers channel for given name. Returns closure that can be
   /// used to send messages for this channel.
@@ -77,7 +77,7 @@ abstract class MessageChannelContext {
   /// call 'nativeshell_init_message_channel_context' with provided argument
   /// and return the result.
   /// This is necessary to do in Flutter plugins where each plugin may have its
-  /// own context and thus should must uniquely named init function.
+  /// own context and thus must have uniquely named init function.
   static MessageChannelContext forInitFunction(
       Pointer<NativeFunction<MessageChannelContextInitFunction>>
           messageChannelInitFunction) {
