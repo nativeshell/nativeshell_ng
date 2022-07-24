@@ -105,16 +105,6 @@ impl FinalizableHandle {
     }
 
     #[cfg(feature = "mock")]
-    /// Attaches object to given isolate
-    pub(crate) fn attach(&self, isolate_id: IsolateId) {
-        let mut state = FinalizableHandleState::get();
-        let object = state.objects.get_mut(&self.id);
-        if let Some(object) = object {
-            object.isolate_id = Some(isolate_id);
-        }
-    }
-
-    #[cfg(feature = "mock")]
     /// Allows simulating object finalizers
     pub fn finalize(&self) {
         let mut state = FinalizableHandleState::get();
