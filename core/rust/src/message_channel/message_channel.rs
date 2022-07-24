@@ -8,7 +8,7 @@ use std::{
 use crate::{
     ffi::{raw, DartPort, DartValue, NativePort},
     message_channel::codec::Serializer,
-    Context, IsolateId, Value,
+    Context, FinalizableHandleState, IsolateId, Value,
 };
 
 use super::codec::Deserializer;
@@ -127,7 +127,7 @@ impl MessageChannel {
         self.delegates.borrow().values().cloned().collect()
     }
 
-    fn register_isolate(&self, isolate_id: i64, port: raw::DartPort) {
+    fn register_isolate(&self, isolate_id: IsolateId, port: raw::DartPort) {
         // Initialize native port if we need to
         let native_port = self
             .native_port
@@ -217,7 +217,13 @@ impl MessageChannel {
         }
     }
 
-    fn handle_send_message(&self, isolate_id: i64, channel: String, reply_id: i64, message: Value) {
+    fn handle_send_message(
+        &self,
+        isolate_id: IsolateId,
+        channel: String,
+        reply_id: i64,
+        message: Value,
+    ) {
         let delegate = self.delegates.borrow().get(&channel).cloned();
         let port = self
             .isolates
@@ -272,6 +278,9 @@ impl MessageChannel {
                 (reply.reply)(Err(SendMessageError::IsolateShutDown));
             }
         }
+        // Make sure to execute all finalizers that didn't have chance to register
+        // with the isolate.
+        FinalizableHandleState::get().finalize_all(isolate_id);
     }
 
     // Received value from native port. This is currently used for isolate exit

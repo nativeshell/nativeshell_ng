@@ -30,6 +30,10 @@ impl FinalizableHandle {
     /// Creates a new finalizable handle instance. Must be created on main thread
     /// and the finalizer will also be invoked on main thread.
     ///
+    /// If FinalizableHandle gets dropped the finalizer will not be executed.
+    /// The finalizer is guaranteed to be executed even if the target isolate gets
+    /// destroyed before it had chance to create dart weak persistent handle.
+    ///
     /// # Arguments
     ///
     /// * `finalizer` - closure that will be executed on main thread when the
@@ -40,14 +44,18 @@ impl FinalizableHandle {
     /// * `external_size` - hit to garbage collector about how much memory is taken by
     ///                     native object. Used when determining memory pressure.
     ///
-    pub fn new<F: FnOnce() + 'static>(external_size: isize, finalizer: F) -> Self {
+    pub fn new<F: FnOnce() + 'static>(
+        external_size: isize,
+        isolate_id: IsolateId,
+        finalizer: F,
+    ) -> Self {
         let id = next_handle();
         let mut state = FinalizableHandleState::get();
         state.objects.insert(
             id,
             FinalizableObjectState {
                 handle: None,
-                isolate_id: None,
+                isolate_id,
                 external_size,
                 finalizer: Some(Capsule::new_with_sender(
                     Box::new(finalizer),
@@ -82,8 +90,9 @@ impl FinalizableHandle {
         let object = state.objects.get_mut(&self.id);
         if let Some(object) = object {
             object.external_size = size;
-            if let Some(isolate_id) = object.isolate_id {
+            if object.handle.is_some() {
                 let handle = self.id;
+                let isolate_id = object.isolate_id;
                 // The actual dart method to update isolate size must be called from
                 // Dart thread, so we ask message channel to relay the request,
                 // which should result in a call to 'update_persistent_handle_size'.
@@ -96,16 +105,6 @@ impl FinalizableHandle {
                             .request_update_external_size(isolate_id, handle);
                     });
             }
-        }
-    }
-
-    #[cfg(feature = "mock")]
-    /// Attaches object to given isolate
-    pub(crate) fn attach(&self, isolate_id: IsolateId) {
-        let mut state = FinalizableHandleState::get();
-        let object = state.objects.get_mut(&self.id);
-        if let Some(object) = object {
-            object.isolate_id = Some(isolate_id);
         }
     }
 
@@ -146,7 +145,7 @@ impl Drop for FinalizableHandle {
         // This finalizable handle has never been sent to dart, we can safely remove
         // it from objects map. If it was sent from dart we'll only remove it from
         // dart finalizer because we need to call delete_weak_persistent_handle on it
-        // which can only be called from dart id.
+        // which can only be called from dart isolate.
         if !has_handle {
             state.objects.remove(&self.id);
         }
@@ -170,14 +169,14 @@ impl FinalizableHandleState {
         state.lock().unwrap()
     }
 
-    #[cfg(feature = "mock")]
+    /// Executes all finalizers that were not registered with the isolates.
     pub(crate) fn finalize_all(&mut self, isolate: IsolateId) {
         // TODO(knopp) use drain_filter once stable
         let to_remove: Vec<_> = self
             .objects
             .iter()
             .filter_map(|(id, object)| {
-                if object.isolate_id == Some(isolate) {
+                if object.isolate_id == isolate && object.handle.is_none() {
                     Some(*id)
                 } else {
                     None
@@ -212,7 +211,7 @@ unsafe impl<T> Send for Movable<T> {}
 
 struct FinalizableObjectState {
     handle: Option<Movable<DartWeakPersistentHandle>>,
-    isolate_id: Option<IsolateId>,
+    isolate_id: IsolateId,
     external_size: isize,
     finalizer: Option<Capsule<Box<dyn FnOnce()>>>,
 }
@@ -293,7 +292,7 @@ pub(crate) mod finalizable_handle_native {
                 finalizer,
             );
             object.handle = Some(Movable(weak_handle));
-            object.isolate_id = Some(isolate_id);
+            assert_eq!(object.isolate_id, isolate_id);
             return handle;
         }
         null_handle

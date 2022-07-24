@@ -111,12 +111,10 @@ impl AttachedMockIsolate {
                 let delegate = delegates.get(&channel);
                 match delegate {
                     Some(delegate) => {
-                        let isolate_id = self.isolate_id;
                         delegate.on_message(
                             self.isolate_id,
                             message,
                             Box::new(move |value| {
-                                MessageChannel::attach_finalizable_handles(&value, isolate_id);
                                 reply(Ok(value));
                                 true
                             }),
@@ -208,8 +206,6 @@ impl MessageChannel {
         let isolate = isolates.get(&target_isolate);
         match isolate {
             Some(isolate) => {
-                Self::attach_finalizable_handles(&message, target_isolate);
-
                 let handlers = isolate.handlers.borrow();
                 let channel = channel.to_owned();
                 let handler = handlers.get(&channel);
@@ -234,8 +230,6 @@ impl MessageChannel {
         let isolate = isolates.get(&target_isolate);
         match isolate {
             Some(isolate) => {
-                Self::attach_finalizable_handles(&message, target_isolate);
-
                 let handlers = isolate.handlers.borrow();
                 let channel = channel.to_owned();
                 let handler = handlers.get(&channel);
@@ -260,26 +254,6 @@ impl MessageChannel {
 
     pub fn unregister_delegate(&self, channel: &str) {
         self.inner.delegates.borrow_mut().remove(channel);
-    }
-
-    fn attach_finalizable_handles(value: &Value, isolate: IsolateId) {
-        match value {
-            Value::FinalizableHandle(value) => {
-                value.attach(isolate);
-            }
-            Value::Map(map) => {
-                for e in map.iter() {
-                    Self::attach_finalizable_handles(&e.0, isolate);
-                    Self::attach_finalizable_handles(&e.1, isolate);
-                }
-            }
-            Value::List(list) => {
-                for e in list {
-                    Self::attach_finalizable_handles(e, isolate);
-                }
-            }
-            _ => {}
-        }
     }
 
     pub(crate) fn request_update_external_size(&self, _target_isolate: IsolateId, _handle: isize) {}
