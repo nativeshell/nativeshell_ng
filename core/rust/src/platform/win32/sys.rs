@@ -1,6 +1,7 @@
 #[allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
 pub mod windows {
     pub type HWND = isize;
+    pub type HANDLE = isize;
     pub type LPARAM = isize;
     pub type WPARAM = usize;
     pub type LRESULT = isize;
@@ -23,6 +24,8 @@ pub mod windows {
     ) -> LRESULT;
     pub type TIMERPROC =
         unsafe extern "system" fn(param0: HWND, param1: u32, param2: usize, param3: u32);
+    pub type QUEUE_STATUS_FLAGS = u32;
+    pub type PEEK_MESSAGE_REMOVE_TYPE = u32;
 
     pub const GWLP_USERDATA: WINDOW_LONG_PTR_INDEX = -21i32;
     pub const IDC_ARROW: PWSTR = 32512i32 as _;
@@ -33,6 +36,11 @@ pub mod windows {
     pub const WM_USER: u32 = 1024u32;
 
     pub const HWND_MESSAGE: isize = (-3i32) as _;
+
+    pub const QS_POSTMESSAGE: QUEUE_STATUS_FLAGS = 8u32;
+
+    pub const PM_REMOVE: PEEK_MESSAGE_REMOVE_TYPE = 1u32;
+    pub const PM_NOYIELD: PEEK_MESSAGE_REMOVE_TYPE = 2u32;
 
     #[repr(C)]
     pub struct WNDCLASSW {
@@ -65,12 +73,14 @@ pub mod windows {
     }
 
     #[repr(C)]
+    #[derive(Default)]
     pub struct POINT {
         pub x: i32,
         pub y: i32,
     }
 
     #[repr(C)]
+    #[derive(Default)]
     pub struct MSG {
         pub hwnd: HWND,
         pub message: u32,
@@ -126,5 +136,19 @@ pub mod windows {
             lptimerfunc: ::core::option::Option<TIMERPROC>,
         ) -> usize;
         pub fn TranslateMessage(lpmsg: *const MSG) -> BOOL;
+        pub fn MsgWaitForMultipleObjects(
+            ncount: u32,
+            phandles: *const HANDLE,
+            fwaitall: BOOL,
+            dwmilliseconds: u32,
+            dwwakemask: QUEUE_STATUS_FLAGS,
+        ) -> u32;
+        pub fn PeekMessageW(
+            lpmsg: *mut MSG,
+            hwnd: HWND,
+            wmsgfiltermin: u32,
+            wmsgfiltermax: u32,
+            wremovemsg: PEEK_MESSAGE_REMOVE_TYPE,
+        ) -> BOOL;
     }
 }

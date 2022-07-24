@@ -161,6 +161,28 @@ impl State {
         }
     }
 
+    fn poll_once(&self) {
+        unsafe {
+            MsgWaitForMultipleObjects(0, std::ptr::null_mut(), 0, 10000000, QS_POSTMESSAGE);
+            let mut message = MSG::default();
+            loop {
+                let res = PeekMessageW(
+                    &mut message as *mut _,
+                    self.hwnd.get(),
+                    0,
+                    0,
+                    PM_REMOVE | PM_NOYIELD,
+                );
+                if res != 0 {
+                    TranslateMessage(&message as *const _);
+                    DispatchMessageW(&message as *const _);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     fn stop(&self) {
         unsafe { PostMessageW(self.hwnd.get(), WM_RUNLOOP_STOP as u32, 0, 0) };
     }
@@ -216,6 +238,10 @@ impl PlatformRunLoop {
 
     pub fn stop(&self) {
         self.state.stop();
+    }
+
+    pub fn poll_once(&self) {
+        self.state.poll_once();
     }
 
     pub fn new_sender(&self) -> PlatformRunLoopSender {
