@@ -30,6 +30,10 @@ impl FinalizableHandle {
     /// Creates a new finalizable handle instance. Must be created on main thread
     /// and the finalizer will also be invoked on main thread.
     ///
+    /// If FinalizableHandle gets dropped the finalizer will not be executed.
+    /// The finalizer is guaranteed to be executed even if the target isolate gets
+    /// destroyed before it had chance to create dart weak persistent handle.
+    ///
     /// # Arguments
     ///
     /// * `finalizer` - closure that will be executed on main thread when the
@@ -141,7 +145,7 @@ impl Drop for FinalizableHandle {
         // This finalizable handle has never been sent to dart, we can safely remove
         // it from objects map. If it was sent from dart we'll only remove it from
         // dart finalizer because we need to call delete_weak_persistent_handle on it
-        // which can only be called from dart id.
+        // which can only be called from dart isolate.
         if !has_handle {
             state.objects.remove(&self.id);
         }
