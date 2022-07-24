@@ -111,7 +111,6 @@ impl AttachedMockIsolate {
                 let delegate = delegates.get(&channel);
                 match delegate {
                     Some(delegate) => {
-                        let isolate_id = self.isolate_id;
                         delegate.on_message(
                             self.isolate_id,
                             message,
