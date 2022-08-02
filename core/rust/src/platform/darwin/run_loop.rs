@@ -9,6 +9,7 @@ use core_foundation::{
     },
     string::CFStringRef,
 };
+use objc::rc::StrongPtr;
 
 use std::{
     cell::Cell,
@@ -41,6 +42,7 @@ struct State {
     timers: HashMap<HandleType, Timer>,
     timer: Option<CFRunLoopTimer>,
     source: Option<CFRunLoopSource>,
+    run_loop_mode: StrongPtr,
 }
 
 // CFRunLoopTimer is thread safe
@@ -65,6 +67,7 @@ impl State {
             timers: HashMap::new(),
             timer: None,
             source: None,
+            run_loop_mode: to_nsstring("NativeShellRunLoopMode"),
         }
     }
 
@@ -93,7 +96,12 @@ impl State {
                     CFRunLoopGetMain(),
                     timer.as_concrete_TypeRef(),
                     kCFRunLoopCommonModes,
-                )
+                );
+                CFRunLoopRemoveTimer(
+                    CFRunLoopGetMain(),
+                    timer.as_concrete_TypeRef(),
+                    *self.run_loop_mode as CFStringRef,
+                );
             };
         }
     }
@@ -124,11 +132,10 @@ impl State {
             );
             // Register source with custom RunLoopMode. This lets clients to only process
             // events scheduled through RunLoopSender (which also includes MessageChannel).
-            let mode = to_nsstring("NativeShellRunLoopMode");
             CFRunLoopAddSource(
                 CFRunLoopGetMain(),
                 source.as_concrete_TypeRef(),
-                *mode as CFStringRef,
+                *self.run_loop_mode as CFStringRef,
             );
         }
         self.source = Some(source);
@@ -144,11 +151,10 @@ impl State {
                     source.as_concrete_TypeRef(),
                     kCFRunLoopCommonModes,
                 );
-                let mode = to_nsstring("NativeShellRunLoopMode");
                 CFRunLoopRemoveSource(
                     CFRunLoopGetMain(),
                     source.as_concrete_TypeRef(),
-                    *mode as CFStringRef,
+                    *self.run_loop_mode as CFStringRef,
                 )
             };
         }
@@ -201,6 +207,11 @@ impl State {
                     CFRunLoopGetMain(),
                     timer.as_concrete_TypeRef(),
                     kCFRunLoopCommonModes,
+                );
+                CFRunLoopAddTimer(
+                    CFRunLoopGetMain(),
+                    timer.as_concrete_TypeRef(),
+                    *self.run_loop_mode as CFStringRef,
                 );
                 CFRunLoopWakeUp(CFRunLoopGetMain());
             };
@@ -335,7 +346,7 @@ impl PlatformRunLoop {
     }
 
     pub fn poll_once(&self) {
-        let mode = to_nsstring("NativeShellRunLoopMode");
+        let mode = self.state.lock().unwrap().run_loop_mode.clone();
         unsafe { CFRunLoopRunInMode(*mode as CFStringRef, 1.0, 1) };
     }
 
