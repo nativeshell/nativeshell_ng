@@ -2,10 +2,10 @@ use core_foundation::{
     base::{kCFAllocatorDefault, TCFType},
     date::CFAbsoluteTimeGetCurrent,
     runloop::{
-        kCFRunLoopCommonModes, CFRunLoopAddSource, CFRunLoopAddTimer, CFRunLoopGetMain,
-        CFRunLoopRemoveTimer, CFRunLoopRunInMode, CFRunLoopSource, CFRunLoopSourceContext,
-        CFRunLoopSourceCreate, CFRunLoopSourceSignal, CFRunLoopTimer, CFRunLoopTimerContext,
-        CFRunLoopTimerRef, CFRunLoopWakeUp,
+        kCFRunLoopCommonModes, kCFRunLoopDefaultMode, kCFRunLoopRunTimedOut, CFRunLoopAddSource,
+        CFRunLoopAddTimer, CFRunLoopGetMain, CFRunLoopRemoveTimer, CFRunLoopRunInMode,
+        CFRunLoopSource, CFRunLoopSourceContext, CFRunLoopSourceCreate, CFRunLoopSourceSignal,
+        CFRunLoopTimer, CFRunLoopTimerContext, CFRunLoopTimerRef, CFRunLoopWakeUp,
     },
     string::CFStringRef,
 };
@@ -263,6 +263,16 @@ pub struct PlatformRunLoop {
     state: Arc<Mutex<State>>,
 }
 
+pub struct PollSession {
+    timed_out: bool,
+}
+
+impl PollSession {
+    pub fn new() -> Self {
+        Self { timed_out: false }
+    }
+}
+
 impl PlatformRunLoop {
     pub fn new() -> Self {
         Self {
@@ -345,9 +355,20 @@ impl PlatformRunLoop {
         }
     }
 
-    pub fn poll_once(&self) {
+    pub fn poll_once(&self, session: &mut PollSession) {
         let mode = self.state.lock().unwrap().run_loop_mode.clone();
-        unsafe { CFRunLoopRunInMode(*mode as CFStringRef, 1.0, 1) };
+        if !session.timed_out {
+            // We try to drain only tasks scheduled by nativeshell_core. However in some
+            // circumstances the UI thread may be waiting for RasterThread (i.e. await toImage)
+            // and raster thread might might be waiting to schedule things on UI thread
+            // (i.e. ResizeSynchronizer) - in which case we must drain the run loop fully.
+            let res = unsafe { CFRunLoopRunInMode(*mode as CFStringRef, 0.006, 1) };
+            if res == kCFRunLoopRunTimedOut {
+                session.timed_out = true;
+            }
+        } else {
+            unsafe { CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0, 1) };
+        }
     }
 
     pub fn new_sender(&self) -> PlatformRunLoopSender {
