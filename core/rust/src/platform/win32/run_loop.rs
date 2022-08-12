@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::sys::windows::*;
+use super::{adapter::to_utf16, sys::windows::*};
 
 use super::adapter::WindowAdapter;
 
@@ -35,6 +35,22 @@ struct State {
 
     // Indicate that stop has been called
     stopping: Cell<bool>,
+}
+
+pub struct PollSession {
+    start: Instant,
+    timed_out: bool,
+    flutter_hwnd: Option<HWND>,
+}
+
+impl PollSession {
+    pub fn new() -> Self {
+        Self {
+            start: Instant::now(),
+            timed_out: false,
+            flutter_hwnd: None,
+        }
+    }
 }
 
 impl State {
@@ -161,22 +177,40 @@ impl State {
         }
     }
 
-    fn poll_once(&self) {
+    fn poll_once(&self, poll_session: &mut PollSession) {
         unsafe {
             MsgWaitForMultipleObjects(0, std::ptr::null_mut(), 0, 10000000, QS_POSTMESSAGE);
             let mut message = MSG::default();
             loop {
-                let res = PeekMessageW(
-                    &mut message as *mut _,
-                    self.hwnd.get(),
-                    0,
-                    0,
-                    PM_REMOVE | PM_NOYIELD,
-                );
-                if res != 0 {
+                // If poll session takes longer than n milliseconds we'll process messages
+                // from flutter task runner HWNDs as well. Unlike macOS this shouldn't be
+                // necessary to prevent deadlocks as raster thread is not currently blocked
+                // on platform thread at any point. This might change in future however
+                // (i.e. because of platform views) so we should handle it correctly.
+                let mut message_hwnds = vec![self.hwnd.get()];
+                if poll_session.timed_out {
+                    let flutter_hwnd = poll_session.flutter_hwnd.get_or_insert_with(|| {
+                        FindWindowExW(
+                            HWND_MESSAGE,
+                            0,
+                            to_utf16("FlutterTaskRunnerWindow").as_mut_ptr(),
+                            std::ptr::null_mut(),
+                        )
+                    });
+                    message_hwnds.push(*flutter_hwnd);
+                }
+                let res = message_hwnds.iter().any(|hwnd| {
+                    PeekMessageW(&mut message as *mut _, *hwnd, 0, 0, PM_REMOVE | PM_NOYIELD) != 0
+                });
+
+                if res {
                     TranslateMessage(&message as *const _);
                     DispatchMessageW(&message as *const _);
                 } else {
+                    if !poll_session.timed_out {
+                        poll_session.timed_out =
+                            poll_session.start.elapsed() > Duration::from_millis(6);
+                    }
                     break;
                 }
             }
@@ -240,8 +274,8 @@ impl PlatformRunLoop {
         self.state.stop();
     }
 
-    pub fn poll_once(&self) {
-        self.state.poll_once();
+    pub fn poll_once(&self, poll_session: &mut PollSession) {
+        self.state.poll_once(poll_session);
     }
 
     pub fn new_sender(&self) -> PlatformRunLoopSender {

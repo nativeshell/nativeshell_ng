@@ -13,7 +13,7 @@ struct WindowClass {
     pub class_name: String,
 }
 
-fn to_utf16(s: &str) -> Vec<u16> {
+pub fn to_utf16(s: &str) -> Vec<u16> {
     let mut string: Vec<u16> = s.encode_utf16().collect();
     string.push(0);
     string

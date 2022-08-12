@@ -128,6 +128,12 @@ pub mod windows {
             wmsgfiltermin: u32,
             wmsgfiltermax: u32,
         ) -> BOOL;
+        pub fn FindWindowExW(
+            hwndparent: HWND,
+            hwndchildafter: HWND,
+            lpszclass: PWSTR,
+            lpszwindow: PWSTR,
+        ) -> HWND;
         pub fn PostMessageW(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> BOOL;
         pub fn SetTimer(
             hwnd: HWND,
