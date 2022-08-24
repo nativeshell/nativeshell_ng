@@ -1,11 +1,13 @@
 [package]
 name = "nativeshell_derive"
+authors = ["Matej Knopp <matej.knopp@gmail.com>"]
 version = "0.1.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Derive proc-macros for NativeShell"
 
 [lib]
 proc-macro = true
-
-edition = "2021"
 
 [dependencies]
 syn = { version = "1.0" }
