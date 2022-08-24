@@ -1,7 +1,7 @@
 name: nativeshell_core
-description: Dart inteface for NativeShell Core
-version: 0.0.1
-homepage:
+description: Dart interface to NativeShell Core
+version: 0.1.0
+homepage: https://github.com/nativeshell/nativeshell_ng
 
 environment:
   sdk: ">=2.13.0 <3.0.0"
