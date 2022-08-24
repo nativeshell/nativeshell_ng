@@ -42,14 +42,14 @@ pub enum Value {
     FinalizableHandle(Arc<FinalizableHandle>),
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub enum DartObject {
     SendPort(raw::DartCObjectSendPort),
     Capability(raw::DartCObjectCapability),
 }
 
 /// Wrapper for Value tuple that ensures that the underyling list is sorted
-#[derive(Clone, Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub struct ValueTupleList(Vec<(Value, Value)>);
 
 impl Default for Value {
@@ -140,7 +140,7 @@ impl<K: Into<Value>, V: Into<Value>> From<HashMap<K, V>> for Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TryFromError {
     BadType,
     IntConversionError,

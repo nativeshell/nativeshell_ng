@@ -163,7 +163,7 @@ pub mod raw {
         unsafe extern "C" fn(isolate_callback_data: *mut c_void, peer: *mut c_void);
 
     #[repr(i32)]
-    #[derive(Copy, Clone, PartialEq, Debug)]
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
     pub enum DartTypedDataType {
         ByteData = 0,
         Int8 = 1,
@@ -182,7 +182,7 @@ pub mod raw {
     }
 
     #[repr(i32)]
-    #[derive(PartialEq, Debug, Clone, Copy)]
+    #[derive(PartialEq, Eq, Debug, Clone, Copy)]
     pub enum DartCObjectType {
         Null = 0,
         Bool = 1,
@@ -223,14 +223,14 @@ pub mod raw {
     }
 
     #[repr(C)]
-    #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Hash)]
     pub struct DartCObjectSendPort {
         pub id: DartPort,
         pub origin_id: DartPort,
     }
 
     #[repr(C)]
-    #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Hash)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Hash)]
     pub struct DartCObjectCapability {
         pub id: i64,
     }
@@ -253,7 +253,7 @@ pub mod raw {
     }
 
     #[repr(C)]
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct DartCObjectExternalTypedData {
         pub ty: DartTypedDataType,
         pub length: isize, // in elements, not bytes
@@ -265,7 +265,7 @@ pub mod raw {
     unsafe impl Send for DartCObjectExternalTypedData {}
 
     #[repr(C)]
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct DartCObjectNativePointer {
         pub ptr: isize,
         pub size: isize,

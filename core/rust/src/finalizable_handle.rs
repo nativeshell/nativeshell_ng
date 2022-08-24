@@ -21,7 +21,7 @@ use crate::{
 ///
 /// FinalizableHandle must be created on main thread, but other methods are thread safe.
 ///
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub struct FinalizableHandle {
     pub(super) id: isize,
 }

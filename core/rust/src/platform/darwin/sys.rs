@@ -34,7 +34,7 @@ pub mod cocoa {
         pub y: CGFloat,
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     #[repr(u64)] // NSUInteger
     pub enum NSEventType {
         NSApplicationDefined = 15,

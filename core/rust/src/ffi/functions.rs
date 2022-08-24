@@ -17,7 +17,7 @@ pub type DartHandleFinalizer =
 pub type DartWeakPersistentHandle = *mut c_void;
 pub type DartHandle = *mut c_void;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DartFunctions {
     pub post_cobject: unsafe extern "C" fn(DartPort, *mut DartCObject) -> bool,
     pub post_integer: unsafe extern "C" fn(DartPort, i64) -> bool,
