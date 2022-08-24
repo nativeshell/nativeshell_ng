@@ -34,6 +34,7 @@ pub mod glib {
     #[link(name = "gtk-3")]
     extern "C" {
         pub fn gtk_main();
+        pub fn gtk_main_iteration();
         pub fn gtk_main_quit();
     }
 }

@@ -103,6 +103,10 @@ impl PlatformRunLoop {
         unsafe { gtk_main_quit() };
     }
 
+    pub fn poll_once(&self) {
+        unsafe { gtk_main_iteration() };
+    }
+
     pub fn new_sender(&self) -> PlatformRunLoopSender {
         PlatformRunLoopSender {}
     }
