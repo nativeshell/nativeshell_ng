@@ -1,6 +1,5 @@
 use core::panic;
 use std::{
-    cell::{Ref, RefCell, RefMut},
     fmt::Display,
     rc::{Rc, Weak},
 };
@@ -65,17 +64,17 @@ pub struct MethodCall {
 }
 
 pub trait MethodHandler: Sized + 'static {
-    fn on_method_call(&mut self, call: MethodCall, reply: MethodCallReply);
+    fn on_method_call(&self, call: MethodCall, reply: MethodCallReply);
 
     /// Implementation can store weak reference if it needs to pass it around.
     /// Guaranteed to be called before any other methods.
-    fn assign_weak_self(&mut self, _weak_self: Weak<RefCell<Self>>) {}
+    fn assign_weak_self(&self, _weak_self: Weak<Self>) {}
 
     /// Keep the method invoker if you want to call methods on engines.
-    fn assign_invoker(&mut self, _invoker: MethodInvoker) {}
+    fn assign_invoker(&self, _invoker: MethodInvoker) {}
 
     /// Called when isolate is about to be destroyed.
-    fn on_isolate_destroyed(&mut self, _isolate: IsolateId) {}
+    fn on_isolate_destroyed(&self, _isolate: IsolateId) {}
 
     /// Register self for handling platform channel methods.
     fn register(self, channel: &str) -> RegisteredMethodHandler<Self> {
@@ -182,10 +181,10 @@ pub struct RegisteredMethodHandler<T: MethodHandler> {
 // Active method call handler
 impl<T: MethodHandler> RegisteredMethodHandler<T> {
     fn new(channel: &str, handler: T) -> Self {
-        Self::new_ref(channel, Rc::new(RefCell::new(handler)))
+        Self::new_ref(channel, Rc::new(handler))
     }
 
-    fn new_ref(channel: &str, handler: Rc<RefCell<T>>) -> Self {
+    fn new_ref(channel: &str, handler: Rc<T>) -> Self {
         let res = Self {
             inner: Rc::new(RegisteredMethodHandlerInner {
                 channel: channel.into(),
@@ -199,16 +198,8 @@ impl<T: MethodHandler> RegisteredMethodHandler<T> {
         res
     }
 
-    pub fn handler(&self) -> Rc<RefCell<T>> {
+    pub fn handler(&self) -> Rc<T> {
         self.inner.handler.clone()
-    }
-
-    pub fn borrow(&self) -> Ref<T> {
-        self.inner.handler.borrow()
-    }
-
-    pub fn borrow_mut(&self) -> RefMut<T> {
-        self.inner.handler.borrow_mut()
     }
 }
 
@@ -222,14 +213,14 @@ impl<T: MethodHandler> Drop for RegisteredMethodHandler<T> {
 
 struct RegisteredMethodHandlerInner<T: MethodHandler> {
     channel: String,
-    handler: Rc<RefCell<T>>,
+    handler: Rc<T>,
 }
 
 impl<T: MethodHandler> RegisteredMethodHandlerInner<T> {
     fn init(&self) {
         let weak = Rc::downgrade(&self.handler);
-        self.handler.borrow_mut().assign_weak_self(weak);
-        self.handler.borrow_mut().assign_invoker(MethodInvoker {
+        self.handler.assign_weak_self(weak);
+        self.handler.assign_invoker(MethodInvoker {
             channel_name: self.channel.clone(),
         });
     }
@@ -246,14 +237,14 @@ impl<T: MethodHandler> MessageChannelDelegate for RegisteredMethodHandlerInner<T
     ) {
         if let Some(call) = unpack_method_call(message, isolate) {
             let reply = MethodCallReply { reply };
-            self.handler.borrow_mut().on_method_call(call, reply);
+            self.handler.on_method_call(call, reply);
         } else {
             panic!("malformed method call message");
         }
     }
 
     fn on_isolate_exited(&self, isolate: IsolateId) {
-        self.handler.borrow_mut().on_isolate_destroyed(isolate);
+        self.handler.on_isolate_destroyed(isolate);
     }
 }
 
