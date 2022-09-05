@@ -63,8 +63,10 @@ impl<T: EventHandler> RegisteredEventChannel<T> {
             _internal: EventChannelInternal {
                 handler: handler.clone(),
                 channel_name: channel.into(),
-                next_sink_id: 1,
-                isolate_to_sink: HashMap::new(),
+                inner: RefCell::new(Inner {
+                    next_sink_id: 1,
+                    isolate_to_sink: HashMap::new(),
+                }),
             }
             .register(channel),
             handler,
@@ -80,32 +82,38 @@ impl<T: EventHandler> RegisteredEventChannel<T> {
     }
 }
 
-struct EventChannelInternal<T: EventHandler> {
-    channel_name: String,
-    pub handler: Rc<RefCell<T>>,
+struct Inner {
     next_sink_id: i64,
     isolate_to_sink: HashMap<IsolateId, i64>,
 }
 
+struct EventChannelInternal<T: EventHandler> {
+    channel_name: String,
+    pub handler: Rc<RefCell<T>>,
+    inner: RefCell<Inner>,
+}
+
 impl<T: EventHandler> MethodHandler for EventChannelInternal<T> {
-    fn on_method_call(&mut self, call: crate::MethodCall, reply: crate::MethodCallReply) {
+    fn on_method_call(&self, call: crate::MethodCall, reply: crate::MethodCallReply) {
         match call.method.as_str() {
             "listen" => {
-                let sink_id = self.next_sink_id;
-                self.next_sink_id += 1;
+                let mut inner = self.inner.borrow_mut();
+                let sink_id = inner.next_sink_id;
+                inner.next_sink_id += 1;
                 let sink = EventSink {
                     id: sink_id,
                     channel_name: self.channel_name.clone(),
                     isolate_id: call.isolate,
                 };
-                self.isolate_to_sink.insert(call.isolate, sink_id);
+                inner.isolate_to_sink.insert(call.isolate, sink_id);
                 self.handler
                     .borrow_mut()
                     .register_event_sink(sink, call.args);
                 reply.send_ok(Value::Null);
             }
             "cancel" => {
-                if let Some(sink_id) = self.isolate_to_sink.remove(&call.isolate) {
+                let mut inner = self.inner.borrow_mut();
+                if let Some(sink_id) = inner.isolate_to_sink.remove(&call.isolate) {
                     self.handler.borrow_mut().unregister_event_sink(sink_id);
                 }
                 reply.send_ok(Value::Null);
@@ -114,8 +122,9 @@ impl<T: EventHandler> MethodHandler for EventChannelInternal<T> {
         }
     }
 
-    fn on_isolate_destroyed(&mut self, isolate: IsolateId) {
-        if let Some(sink_id) = self.isolate_to_sink.remove(&isolate) {
+    fn on_isolate_destroyed(&self, isolate: IsolateId) {
+        let mut inner = self.inner.borrow_mut();
+        if let Some(sink_id) = inner.isolate_to_sink.remove(&isolate) {
             self.handler.borrow_mut().unregister_event_sink(sink_id);
         }
     }
