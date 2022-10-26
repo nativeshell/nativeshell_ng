@@ -38,6 +38,7 @@ pub mod windows {
     pub const HWND_MESSAGE: isize = (-3i32) as _;
 
     pub const QS_POSTMESSAGE: QUEUE_STATUS_FLAGS = 8u32;
+    pub const QS_TIMER: QUEUE_STATUS_FLAGS = 0x10u32;
 
     pub const PM_REMOVE: PEEK_MESSAGE_REMOVE_TYPE = 1u32;
     pub const PM_NOYIELD: PEEK_MESSAGE_REMOVE_TYPE = 2u32;
