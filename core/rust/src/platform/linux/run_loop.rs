@@ -33,7 +33,7 @@ fn into_raw<F: FnMut() -> gboolean + 'static>(func: F) -> gpointer {
 }
 
 unsafe extern "C" fn destroy_closure<F: FnMut() -> gboolean + 'static>(ptr: gpointer) {
-    Box::<RefCell<F>>::from_raw(ptr as *mut _);
+    let _ = Box::<RefCell<F>>::from_raw(ptr as *mut _);
 }
 
 pub fn timeout_add_local<F>(interval: Duration, func: F) -> SourceId
@@ -139,7 +139,7 @@ impl PlatformRunLoopSender {
             G_SOURCE_REMOVE
         }
         unsafe extern "C" fn destroy_closure<F: FnOnce() + 'static>(ptr: gpointer) {
-            Box::<Option<F>>::from_raw(ptr as *mut _);
+            let _ = Box::<Option<F>>::from_raw(ptr as *mut _);
         }
         let callback = Box::into_raw(Box::new(Some(callback)));
         unsafe {
