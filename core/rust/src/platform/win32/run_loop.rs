@@ -179,7 +179,13 @@ impl State {
 
     fn poll_once(&self, poll_session: &mut PollSession) {
         unsafe {
-            MsgWaitForMultipleObjects(0, std::ptr::null_mut(), 0, 10000000, QS_POSTMESSAGE);
+            MsgWaitForMultipleObjects(
+                0,
+                std::ptr::null_mut(),
+                0,
+                10000000,
+                QS_POSTMESSAGE | QS_TIMER,
+            );
             let mut message = MSG::default();
             loop {
                 // If poll session takes longer than n milliseconds we'll process messages
