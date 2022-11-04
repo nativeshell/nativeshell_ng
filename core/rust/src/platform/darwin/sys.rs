@@ -4,8 +4,10 @@ use objc::{class, msg_send, rc::StrongPtr, sel, sel_impl};
 
 use self::cocoa::id;
 
-//
 #[link(name = "Foundation", kind = "framework")]
+extern "C" {}
+
+#[cfg(target_os = "macos")]
 #[link(name = "AppKit", kind = "framework")]
 extern "C" {}
 
