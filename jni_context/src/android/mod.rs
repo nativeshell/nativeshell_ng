@@ -86,7 +86,7 @@ impl AndroidJniContext {
         F: FnOnce() + 'static + Send,
     {
         let mut callbacks = self.callbacks.lock().unwrap();
-        callbacks.add(Box::new(f));
+        callbacks.schedule(Box::new(f));
     }
 
     /// Returns true if current thread is the main thread, false otherwise.

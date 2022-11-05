@@ -35,7 +35,7 @@ pub(crate) struct RunLoopCallbacks {
 }
 
 impl RunLoopCallbacks {
-    pub fn add(&mut self, callback: SenderCallback) {
+    pub fn schedule(&mut self, callback: SenderCallback) {
         self.callbacks.push(callback);
         let buf = [0u8; 8];
         unsafe {

@@ -54,6 +54,9 @@ jobs:
       - name: Install GTK
         if: (matrix.os == 'ubuntu-latest')
         run: sudo apt-get update && sudo apt-get install libgtk-3-dev
+      - name: Update rust
+        if: (matrix.os == 'ubuntu-latest')
+        run: rustup update
       - uses: actions/checkout@v2
       - name: Install clippy
         run: rustup component add clippy
