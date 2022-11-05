@@ -1,5 +1,5 @@
 [package]
-name = "flutter_jni_context"
+name = "nativeshell_jni_context"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"

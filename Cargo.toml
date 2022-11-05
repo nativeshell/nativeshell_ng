@@ -8,4 +8,4 @@ members = [
 ]
 
 [patch.crates-io]
-flutter_jni_context = { path = "jni_context" }
+nativeshell_jni_context = { path = "jni_context" }

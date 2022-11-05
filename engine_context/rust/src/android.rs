@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use flutter_jni_context::AndroidJniContext;
 use jni::{objects::JObject, sys::jint};
+use nativeshell_jni_context::AndroidJniContext;
 
 use crate::FlutterEngineContextResult;
 
@@ -15,7 +15,7 @@ pub enum Error {
     InvalidHandle,
     MissingClassLoader,
     JNIError(jni::errors::Error),
-    AndroidJniContextError(flutter_jni_context::Error),
+    AndroidJniContextError(nativeshell_jni_context::Error),
 }
 
 pub(crate) type FlutterView = jni::objects::GlobalRef;
@@ -42,8 +42,8 @@ impl From<jni::errors::Error> for Error {
     }
 }
 
-impl From<flutter_jni_context::Error> for Error {
-    fn from(err: flutter_jni_context::Error) -> Self {
+impl From<nativeshell_jni_context::Error> for Error {
+    fn from(err: nativeshell_jni_context::Error) -> Self {
         Error::AndroidJniContextError(err)
     }
 }
