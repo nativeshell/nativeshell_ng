@@ -1,0 +1,20 @@
+[package]
+name = "flutter_engine_context"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Easy access to FlutterView, FlutterBinaryMessenger and FlutterTextureRegistry for FFI."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.19"
+android_logger = "0.11"
+log = "0.4"
+flutter_jni_context = "0.1.0"
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+objc = "0.2.7"
+cocoa = "0.24"

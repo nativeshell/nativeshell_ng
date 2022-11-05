@@ -1,6 +1,11 @@
 [workspace]
 
 members = [
-    "core/rust",
     "core/rust_derive",
+    "core/rust",
+    "engine_context/rust",
+    "jni_context",
 ]
+
+[patch.crates-io]
+flutter_jni_context = { path = "jni_context" }

@@ -1,0 +1,25 @@
+From 1ee31acf95ae38e4b1db99a819ee991970b24d77 Mon Sep 17 00:00:00 2001
+From: Matej Knopp <matej.knopp@gmail.com>
+Date: Sun, 17 Jul 2022 23:05:34 +0100
+Subject: [PATCH 2/2] Make clippy happy
+
+---
+ core/rust/src/platform/darwin/run_loop.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/core/rust/src/platform/darwin/run_loop.rs b/core/rust/src/platform/darwin/run_loop.rs
+index 93f9c51..a9dcd1d 100644
+--- a/core/rust/src/platform/darwin/run_loop.rs
++++ b/core/rust/src/platform/darwin/run_loop.rs
+@@ -330,7 +330,7 @@ impl PlatformRunLoop {
+             ];
+ 
+             // To stop event loop immediately, we need to post event.
+-            let () = msg_send![app, postEvent: dummy_event atStart: YES];
++            let _: () = msg_send![app, postEvent: dummy_event atStart: YES];
+         }
+     }
+ 
+-- 
+2.32.1 (Apple Git-133)
+

@@ -154,7 +154,7 @@ impl<'a> Reader<'a> {
         } else {
             let v = &self.buf[self.pos..self.pos + len];
             self.pos += len;
-            String::from_utf8_lossy(v).to_owned().to_string()
+            String::from_utf8_lossy(v).into()
         }
     }
     fn align_to(&mut self, align: usize) {

@@ -1,0 +1,35 @@
+From 1505b454ce65d94b5fff83d6be437fd446a1bbfe Mon Sep 17 00:00:00 2001
+From: Matej Knopp <matej.knopp@gmail.com>
+Date: Sun, 17 Jul 2022 23:01:00 +0100
+Subject: [PATCH 1/2] Fix panic in finalizer
+
+---
+ core/rust/src/finalizable_handle.rs | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/core/rust/src/finalizable_handle.rs b/core/rust/src/finalizable_handle.rs
+index 3e796c8..007b471 100644
+--- a/core/rust/src/finalizable_handle.rs
++++ b/core/rust/src/finalizable_handle.rs
+@@ -244,12 +244,12 @@ pub(crate) mod finalizable_handle_native {
+             state.objects.remove(&handle)
+         };
+         if let Some(mut object_state) = object_state {
+-            let mut finalizer = object_state
+-                .finalizer
+-                .take()
+-                .expect("Finalizer executed more than once");
+-            let finalizer = finalizer.take().unwrap();
+-            finalizer();
++            let finalizer = object_state.finalizer.take();
++            // Finalizer may have been removed in FinalizableHandle::drop
++            if let Some(mut finalizer) = finalizer {
++                let finalizer = finalizer.take().unwrap();
++                finalizer();
++            }
+         }
+     }
+ 
+-- 
+2.32.1 (Apple Git-133)
+
