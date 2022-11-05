@@ -1,0 +1,5 @@
+name: nativeshell_ng
+
+packages:
+  - engine_context/dart
+  - core/dart
